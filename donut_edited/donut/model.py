@@ -6,10 +6,12 @@ MIT License
 import math
 import os
 import re
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Tuple
+import random
 
 import numpy as np
 import PIL
+import cv2
 import timm
 import torch
 import torch.nn as nn
@@ -60,6 +62,13 @@ class SwinEncoder(nn.Module):
             ]
         )
 
+        self.BlurTransforms = [
+            lambda img, ksize : cv2.GaussianBlur(img,(ksize,ksize),cv2.BORDER_DEFAULT), 
+            lambda img, ksize : cv2.medianBlur(img,ksize if ksize<=3 else 3), 
+            lambda img, ksize : cv2.blur(img,(ksize,ksize)),
+            lambda img, ksize : self.motion_blur(img, 2*ksize+1)
+        ]
+
         self.model = SwinTransformer(
             img_size=self.input_size,
             depths=self.encoder_layer,
@@ -92,6 +101,21 @@ class SwinEncoder(nn.Module):
                     new_swin_state_dict[x] = swin_state_dict[x]
             self.model.load_state_dict(new_swin_state_dict)
 
+    def motion_blur(self, img, ksize):
+        kernel = np.zeros((ksize, ksize))
+        kernel[ksize//2, :] = 1
+        kernel = kernel / np.sum(kernel)
+        random_angle = random.randint(0, 45) #Rotate only by 45 degrees and not more
+        kernel = rotate(kernel, random_angle)
+        return cv2.filter2D(img, -1, kernel)
+    
+    def random_blur(self, img_to_blur):
+        num = random.randint(0, len(self.BlurTransforms)+1)
+        for transformation in np.random.choice(self.BlurTransforms, num, replace=True):
+            ksize = np.random.randint(1,3)
+            img_to_blur = transformation(img_to_blur,2*ksize-1)
+        return img_to_blur
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -102,7 +126,7 @@ class SwinEncoder(nn.Module):
         x = self.model.layers(x)
         return x
 
-    def prepare_input(self, img: PIL.Image.Image, random_padding: bool = False) -> torch.Tensor:
+    def prepare_input(self, img: PIL.Image.Image, random_padding: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Convert PIL Image to tensor according to specified input_size after following steps below:
             - resize
@@ -131,7 +155,14 @@ class SwinEncoder(nn.Module):
             delta_width - pad_width,
             delta_height - pad_height,
         )
-        return self.to_tensor(ImageOps.expand(img, padding))
+
+        orig_img = ImageOps.expand(img, padding)
+
+        #Apply Blurring
+        orig_numpy = np.asarray(orig_img)
+        blur_numpy = self.random_blur(orig_numpy)
+
+        return self.to_tensor(orig_img), self.to_tensor(blur_numpy)
 
 
 class BARTDecoder(nn.Module):

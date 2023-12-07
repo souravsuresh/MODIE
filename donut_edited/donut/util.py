@@ -106,7 +106,7 @@ class DonutDataset(Dataset):
         sample = self.dataset[idx]
 
         # input_tensor
-        input_tensor = self.donut_model.encoder.prepare_input(sample["image"], random_padding=self.split == "train")
+        input_tensor, input_blur_tensor = self.donut_model.encoder.prepare_input(sample["image"], random_padding=self.split == "train")
 
         # input_ids
         processed_parse = random.choice(self.gt_token_sequences[idx])  # can be more than one, e.g., DocVQA Task 1
