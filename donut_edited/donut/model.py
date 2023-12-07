@@ -110,7 +110,7 @@ class SwinEncoder(nn.Module):
         return cv2.filter2D(img, -1, kernel)
     
     def random_blur(self, img_to_blur):
-        num = random.randint(0, len(self.BlurTransforms)+1)
+        num = random.randint(0, len(self.BlurTransforms)-1) 
         for transformation in np.random.choice(self.BlurTransforms, num, replace=True):
             ksize = np.random.randint(1,3)
             img_to_blur = transformation(img_to_blur,2*ksize-1)
