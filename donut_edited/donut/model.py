@@ -162,7 +162,7 @@ class SwinEncoder(nn.Module):
         orig_numpy = np.asarray(orig_img)
         blur_numpy = self.random_blur(orig_numpy)
 
-        return self.to_tensor(orig_img), self.to_tensor(blur_numpy)
+        return self.to_tensor(blur_numpy)
 
 
 class BARTDecoder(nn.Module):
