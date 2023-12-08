@@ -166,6 +166,8 @@ if __name__ == "__main__":
     parser.add_argument("--exp_version", type=str, required=False)
     args, left_argv = parser.parse_known_args()
 
+    print(f"CUDA devices found {torch.cuda.device_count()}")
+
     config = Config(args.config)
     config.argv_update(left_argv)
 
