@@ -127,7 +127,7 @@ class SwinEncoder(nn.Module):
         x = self.model.layers(x)
         return x
 
-    def prepare_input(self, img: PIL.Image.Image, random_padding: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+    def prepare_input(self, img: PIL.Image.Image, random_padding: bool = False, add_blur: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Convert PIL Image to tensor according to specified input_size after following steps below:
             - resize
@@ -162,6 +162,9 @@ class SwinEncoder(nn.Module):
         #Apply Blurring
         orig_numpy = np.asarray(orig_img)
         blur_numpy = self.random_blur(orig_numpy)
+
+        if not add_blur:
+            return self.to_tensor(orig_numpy)
 
         return self.to_tensor(blur_numpy)
 
