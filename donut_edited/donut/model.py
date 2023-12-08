@@ -12,6 +12,7 @@ import random
 import numpy as np
 import PIL
 import cv2
+import scipy.ndimage
 import timm
 import torch
 import torch.nn as nn
@@ -106,7 +107,7 @@ class SwinEncoder(nn.Module):
         kernel[ksize//2, :] = 1
         kernel = kernel / np.sum(kernel)
         random_angle = random.randint(0, 45) #Rotate only by 45 degrees and not more
-        kernel = rotate(kernel, random_angle)
+        kernel = scipy.ndimage.rotate(kernel, random_angle)
         return cv2.filter2D(img, -1, kernel)
     
     def random_blur(self, img_to_blur):
