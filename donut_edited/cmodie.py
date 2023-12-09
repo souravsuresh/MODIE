@@ -7,16 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1mI5euyw3M1qQpJv0QqBRYjNM6ZMwFj2M
 """
 
-# !unzip MODIE-main.zip
-
-cd MODIE-main/donut_edited/
-
-ls
-
-pip install sconf datasets timm zss pytorch_lightning sentencepiece
-
-cd drive/MyDrive/donut/MODIE-main/donut_edited/
-
 import argparse
 import json
 import os
@@ -79,11 +69,7 @@ def custom_collate_fn(batch):
     blur_images = torch.stack(blur_images)
     return {"clear_images" : clear_images, "blur_images" : blur_images}
 
-config.DOWNLOADED_DATASETS_PATH = Path('/content/drive/MyDrive/donut')
-
 dataset = load_dataset("naver-clova-ix/cord-v2",batch_size=1, split="train")
-
-
 
 train_loader = DataLoader(dataset, batch_size=1,  collate_fn=custom_collate_fn, shuffle=True)
 
@@ -95,7 +81,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 model.to(device)
 
-config = Config("/content/drive/MyDrive/donut/MODIE-main/donut_edited/config/train_cord.yaml")
+config = Config("config/train_cord.yaml")
 
 """
 Donut
@@ -122,9 +108,6 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from matplotlib import cm
 
-
-torch.cuda.empty_cache()
-time.sleep(0.2)
 def viz(args):
     checkpoint = "naver-clova-ix/donut-base"
 
