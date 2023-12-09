@@ -35,11 +35,9 @@ device = "cuda"
 checkpoint = "naver-clova-ix/donut-base"
 
 processor = DonutProcessor.from_pretrained(checkpoint)
-pretrained_model = VisionEncoderDecoderModel.from_pretrained(checkpoint)
+# pretrained_model = VisionEncoderDecoderModel.from_pretrained(checkpoint)
 
-from torch.nn.functional import cosine_similarity
-from torch.nn.functional import cosine_similarity
-
+config = Config("config/train_cord.yaml")
 
 class DonutEncoderModel(nn.Module):
     def __init__(self, checkpoint="naver-clova-ix/donut-base"):
@@ -56,10 +54,6 @@ class DonutEncoderModel(nn.Module):
         blur_embedding = self.pretrained_model_blur.encoder(blur_image_tensors).last_hidden_state.squeeze(0)
         return clear_embedding, blur_embedding
 
-criterion = nn.CosineEmbeddingLoss()
-
-from torchvision import transforms
-
 def custom_collate_fn(batch):
 
     clear_images = [prepare_input(config, img['image']) for img in batch]
@@ -73,119 +67,87 @@ dataset = load_dataset("naver-clova-ix/cord-v2",batch_size=1, split="train")
 
 train_loader = DataLoader(dataset, batch_size=1,  collate_fn=custom_collate_fn, shuffle=True)
 
-dataset
-
 model = DonutEncoderModel()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    #config.argv_update(left_argv)
+criterion = nn.CosineEmbeddingLoss()
 
 model.to(device)
 
-config = Config("config/train_cord.yaml")
+# def viz(args):
+#     checkpoint = "naver-clova-ix/donut-base"
 
-"""
-Donut
-Copyright (c) 2022-present NAVER Corp.
-MIT License
-"""
-import argparse
-import json
-import os
-import re
-from pathlib import Path
-from sconf import Config
-import numpy as np
-import torch
-from datasets import load_dataset
-from PIL import Image
-from tqdm import tqdm
-import time
-from donut import DonutModel, JSONParseEvaluator, load_json, save_json
-from transformers import DonutProcessor, VisionEncoderDecoderModel
-from lightning_module import DonutDataPLModule, DonutModelPLModule
-from utils.util import prepare_input
-import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
-from matplotlib import cm
+#     # processor = DonutProcessor.from_pretrained(checkpoint)
+#     # pretrained_model = VisionEncoderDecoderModel.from_pretrained(checkpoint)
 
-def viz(args):
-    checkpoint = "naver-clova-ix/donut-base"
+#     # pretrained_model = DonutModel.from_pretrained(args.pretrained_model_name_or_path)
 
-    # processor = DonutProcessor.from_pretrained(checkpoint)
-    # pretrained_model = VisionEncoderDecoderModel.from_pretrained(checkpoint)
+#     if torch.cuda.is_available():
+#         pretrained_model.half()
+#         pretrained_model.to("cuda")
 
-    # pretrained_model = DonutModel.from_pretrained(args.pretrained_model_name_or_path)
+#     # pretrained_model.eval()
+#     dataset = load_dataset(args.dataset_name_or_paths[0], split="validation")
+#     embeds_normal, embeds_blur = [], []
+#     print("Loaded model and dataset!!")
+#     i = 0
 
-    if torch.cuda.is_available():
-        pretrained_model.half()
-        pretrained_model.to("cuda")
+#     tsne = TSNE(2, verbose=1)
+#     cmap = cm.get_cmap('tab10')
+#     fig, ax = plt.subplots(figsize=(8,8))
+#     embeds, embeds_blur = [], []
+#     for idx, sample in tqdm(enumerate(dataset), total=len(dataset)):
+#         image_tensors = prepare_input(config, sample["image"]).unsqueeze(0)
 
-    # pretrained_model.eval()
-    dataset = load_dataset(args.dataset_name_or_paths[0], split="validation")
-    embeds_normal, embeds_blur = [], []
-    print("Loaded model and dataset!!")
-    i = 0
+#         if torch.cuda.is_available():  # half is not compatible in cpu implementation.
+#             # image_tensors = image_tensors.half()
+#             image_tensors = image_tensors.to("cuda")
 
-    tsne = TSNE(2, verbose=1)
-    cmap = cm.get_cmap('tab10')
-    fig, ax = plt.subplots(figsize=(8,8))
-    embeds, embeds_blur = [], []
-    for idx, sample in tqdm(enumerate(dataset), total=len(dataset)):
-        image_tensors = prepare_input(config, sample["image"]).unsqueeze(0)
+#         # output = pretrained_model.encoder(image_tensors).last_hidden_state.squeeze(0)
+#         # print(output.shape)
+#         # embeds_normal.append(output)
 
-        if torch.cuda.is_available():  # half is not compatible in cpu implementation.
-            # image_tensors = image_tensors.half()
-            image_tensors = image_tensors.to("cuda")
+#         image_tensors_blur = prepare_input(config, sample["image"], add_blur=True).unsqueeze(0)
 
-        # output = pretrained_model.encoder(image_tensors).last_hidden_state.squeeze(0)
-        # print(output.shape)
-        # embeds_normal.append(output)
+#         if torch.cuda.is_available():  # half is not compatible in cpu implementation.
+#             # image_tensors_blur = image_tensors_blur.half()
+#             image_tensors_blur = image_tensors_blur.to("cuda")
 
-        image_tensors_blur = prepare_input(config, sample["image"], add_blur=True).unsqueeze(0)
+#         output, output_blur = model(image_tensors, image_tensors_blur)
+#         # output_blur = pretrained_model.encoder(image_tensors_blur).last_hidden_state.squeeze(0)
+#         print(output_blur.shape, output.shape)
+#         # embeds_blur.append(output_blur)
+#         # print("Generated :: ", idx)
+#         # import pdb;pdb.set_trace()
 
-        if torch.cuda.is_available():  # half is not compatible in cpu implementation.
-            # image_tensors_blur = image_tensors_blur.half()
-            image_tensors_blur = image_tensors_blur.to("cuda")
+#         print("Plotting embeddings!!")
+#         # embeds_normal, embeds_blur = np.array(embeds_normal), np.array(embeds_blur)
+#         # import pdb;pdb.set_trace();
+#         embeds.append(output.to('cpu').detach().numpy())
+#         embeds_blur.append(output_blur.to('cpu').detach().numpy())
 
-        output, output_blur = model(image_tensors, image_tensors_blur)
-        # output_blur = pretrained_model.encoder(image_tensors_blur).last_hidden_state.squeeze(0)
-        print(output_blur.shape, output.shape)
-        # embeds_blur.append(output_blur)
-        # print("Generated :: ", idx)
-        # import pdb;pdb.set_trace()
+#         del image_tensors_blur
+#         del image_tensors
+#         del output
+#         del output_blur
 
-        print("Plotting embeddings!!")
-        # embeds_normal, embeds_blur = np.array(embeds_normal), np.array(embeds_blur)
-        # import pdb;pdb.set_trace();
-        embeds.append(output.to('cpu').detach().numpy())
-        embeds_blur.append(output_blur.to('cpu').detach().numpy())
+#         torch.cuda.empty_cache()
+#         time.sleep(0.2)     # giving some time to clear!!
+#         i += 1
+#         if i == 1:
+#             break
 
-        del image_tensors_blur
-        del image_tensors
-        del output
-        del output_blur
+#     for i in range(len(embeds)):
+#         fig, ax = plt.subplots(figsize=(8,8))
+#         proj_normal = tsne.fit_transform(np.array(embeds[i]))
+#         proj_blur = tsne.fit_transform(np.array(embeds_blur[i]))
+#         # proj_normal = tsne.fit_transform(embeds_normal)
+#         # proj_blur = tsne.fit_transform(embeds_blur)
 
-        torch.cuda.empty_cache()
-        time.sleep(0.2)     # giving some time to clear!!
-        i += 1
-        if i == 1:
-            break
+#         ax.scatter(proj_normal[:,0],proj_normal[:,1], c=np.array(cmap(0)).reshape(1,4), label = "Normal" ,alpha=0.5)
+#         ax.scatter(proj_blur[:,0],proj_blur[:,1], c=np.array(cmap(1)).reshape(1,4), label = "With Blur" ,alpha=0.5)
 
-    for i in range(len(embeds)):
-        fig, ax = plt.subplots(figsize=(8,8))
-        proj_normal = tsne.fit_transform(np.array(embeds[i]))
-        proj_blur = tsne.fit_transform(np.array(embeds_blur[i]))
-        # proj_normal = tsne.fit_transform(embeds_normal)
-        # proj_blur = tsne.fit_transform(embeds_blur)
-
-        ax.scatter(proj_normal[:,0],proj_normal[:,1], c=np.array(cmap(0)).reshape(1,4), label = "Normal" ,alpha=0.5)
-        ax.scatter(proj_blur[:,0],proj_blur[:,1], c=np.array(cmap(1)).reshape(1,4), label = "With Blur" ,alpha=0.5)
-
-        ax.legend(fontsize='large', markerscale=2)
-        plt.savefig(f'modie_embeddings_trained_{i}.png')
-
-torch.cuda.empty_cache()
-time.sleep(10)
+#         ax.legend(fontsize='large', markerscale=2)
+#         plt.savefig(f'modie_embeddings_trained_{i}.png')
 
 for epoch in range(100):
     model.train()
@@ -195,11 +157,12 @@ for epoch in range(100):
         blur_img_tensor  = batch['blur_images'].to(device)
         optimizer.zero_grad()
         torch_zeros = torch.ones(clear_img_tensor.shape[0]).to(device)
-        outputs = model(clear_img_tensor, blur_img_tensor)
 
-        loss = criterion(torch.flatten(outputs[0],start_dim=1), torch.flatten(outputs[1],start_dim=1), torch_zeros)
+        clear_img_embed, blur_img_embed = model(clear_img_tensor, blur_img_tensor)
+
+        loss = criterion(torch.flatten(clear_img_embed,start_dim=1), torch.flatten(blur_img_embed,start_dim=1), torch_zeros)
         print(epoch, loss)
-        viz(config)
+        # viz(config)
         loss.backward()
         optimizer.step()
 
