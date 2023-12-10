@@ -255,12 +255,12 @@ class DonutDataset(Dataset):
 processor.image_processor.size = config.input_size[::-1] # should be (width, height)
 processor.image_processor.do_align_long_axis = False
 
-train_dataset = DonutDataset(config.dataset_name_or_paths, config=config,
+train_dataset = DonutDataset("naver-clova-ix/cord-v2", config=config,
                              split="train", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
                              sort_json_key=config.sort_json_key, # cord dataset is preprocessed, so no need for this
                              )
 
-val_dataset = DonutDataset(config.dataset_name_or_paths, config=config,
+val_dataset = DonutDataset("naver-clova-ix/cord-v2", config=config,
                              split="validation", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
                              sort_json_key=config.sort_json_key, # cord dataset is preprocessed, so no need for this
                              )
