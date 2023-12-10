@@ -52,16 +52,31 @@ We'll update some settings for fine-tuning, namely the image size and the max le
 """
 
 from transformers import VisionEncoderDecoderConfig
+from sconf import Config
 
-image_size = [1280, 960]
-max_length = 768
+# config = {"max_epochs":50,
+#           "val_check_interval":0.2, # how many times we want to validate during an epoch
+#           "check_val_every_n_epoch":1,
+#           "gradient_clip_val":1.0,
+#           "num_training_samples_per_epoch": 1600,
+#           "lr":3e-5,
+#           "train_batch_sizes": [4],
+#           "val_batch_sizes": [1],
+#           # "seed":2022,
+#           "num_nodes": 1,
+#           "warmup_steps": 300, # 800/8*30/10, 10%
+#           "result_path": "./result",
+#           "verbose": True,
+#           }
+
+config = Config("config/train_cord.yaml")
 
 # update image_size of the encoder
 # during pre-training, a larger image size was used
-config = VisionEncoderDecoderConfig.from_pretrained("naver-clova-ix/donut-base")
-config.encoder.image_size = image_size # (height, width)
+encdecconfig = VisionEncoderDecoderConfig.from_pretrained(config.pretrained_model_name_or_path)
+encdecconfig.encoder.image_size = config.input_size # (height, width)
 # update max_length of the decoder (for generation)
-config.decoder.max_length = max_length
+encdecconfig.decoder.max_length = config.max_length
 # TODO we should actually update max_position_embeddings and interpolate the pre-trained ones:
 # https://github.com/clovaai/donut/blob/0acc65a85d140852b8d9928565f0f6b2d98dc088/donut/model.py#L602
 
@@ -69,8 +84,8 @@ config.decoder.max_length = max_length
 
 from transformers import DonutProcessor, VisionEncoderDecoderModel
 
-processor = DonutProcessor.from_pretrained("naver-clova-ix/donut-base")
-model = VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base", config=config)
+processor = DonutProcessor.from_pretrained(config.pretrained_model_name_or_path)
+model = VisionEncoderDecoderModel.from_pretrained(config.pretrained_model_name_or_path, config=encdecconfig)
 
 """## Create PyTorch dataset
 
@@ -87,6 +102,7 @@ from typing import Any, List, Tuple
 
 import torch
 from torch.utils.data import Dataset
+from utils.util import prepare_input
 
 added_tokens = []
 
@@ -110,7 +126,7 @@ class DonutDataset(Dataset):
     def __init__(
         self,
         dataset_name_or_path: str,
-        max_length: int,
+        config: Config,
         split: str = "train",
         ignore_id: int = -100,
         task_start_token: str = "<s>",
@@ -119,7 +135,8 @@ class DonutDataset(Dataset):
     ):
         super().__init__()
 
-        self.max_length = max_length
+        self.config = config
+        self.max_length = config.max_length
         self.split = split
         self.ignore_id = ignore_id
         self.task_start_token = task_start_token
@@ -210,7 +227,9 @@ class DonutDataset(Dataset):
         sample = self.dataset[idx]
 
         # inputs
-        pixel_values = processor(sample["image"], random_padding=self.split == "train", return_tensors="pt").pixel_values
+        img = sample['image']
+        blur_img = prepare_input(self.config, img, add_blur=True)
+        pixel_values = processor(blur_img, random_padding=self.split == "train", return_tensors="pt").pixel_values
         pixel_values = pixel_values.squeeze()
 
         # targets
@@ -233,17 +252,17 @@ class DonutDataset(Dataset):
 
 # we update some settings which differ from pretraining; namely the size of the images + no rotation required
 # source: https://github.com/clovaai/donut/blob/master/config/train_cord.yaml
-processor.image_processor.size = image_size[::-1] # should be (width, height)
+processor.image_processor.size = config.input_size[::-1] # should be (width, height)
 processor.image_processor.do_align_long_axis = False
 
-train_dataset = DonutDataset("naver-clova-ix/cord-v2", max_length=max_length,
+train_dataset = DonutDataset(config.dataset_name_or_paths, config=config, max_length=config.max_length,
                              split="train", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
-                             sort_json_key=False, # cord dataset is preprocessed, so no need for this
+                             sort_json_key=config.sort_json_key, # cord dataset is preprocessed, so no need for this
                              )
 
-val_dataset = DonutDataset("naver-clova-ix/cord-v2", max_length=max_length,
+val_dataset = DonutDataset(config.dataset_name_or_paths, config=config, max_length=config.max_length,
                              split="validation", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
-                             sort_json_key=False, # cord dataset is preprocessed, so no need for this
+                             sort_json_key=config.sort_json_key, # cord dataset is preprocessed, so no need for this
                              )
 
 """Let's check which tokens are added:"""
@@ -299,7 +318,7 @@ from torch.utils.data import DataLoader
 
 # feel free to increase the batch size if you have a lot of memory
 # I'm fine-tuning on Colab and given the large image size, batch size > 1 is not feasible
-train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
+train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
 val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
 
 """Let's verify a batch:"""
@@ -367,7 +386,7 @@ class DonutModelPLModule(pl.LightningModule):
 
         outputs = self.model.generate(pixel_values,
                                    decoder_input_ids=decoder_input_ids,
-                                   max_length=max_length,
+                                   max_length=self.config.max_length,
                                    early_stopping=True,
                                    pad_token_id=self.processor.tokenizer.pad_token_id,
                                    eos_token_id=self.processor.tokenizer.eos_token_id,
@@ -418,21 +437,6 @@ Next, let's train! This happens instantiating a PyTorch Lightning `Trainer`, and
 What's great is that we can automatically train on the hardware we have (in our case, a single GPU), enable mixed precision (`fp16=True`, which makes sure we don't consume as much memory), add Weights and Biases logging, and so on.
 """
 
-config = {"max_epochs":30,
-          "val_check_interval":0.2, # how many times we want to validate during an epoch
-          "check_val_every_n_epoch":1,
-          "gradient_clip_val":1.0,
-          "num_training_samples_per_epoch": 800,
-          "lr":3e-5,
-          "train_batch_sizes": [8],
-          "val_batch_sizes": [1],
-          # "seed":2022,
-          "num_nodes": 1,
-          "warmup_steps": 300, # 800/8*30/10, 10%
-          "result_path": "./result",
-          "verbose": True,
-          }
-
 model_module = DonutModelPLModule(config, processor, model)
 
 """We'll use a custom callback to push our model to the hub during training (after each epoch + end of training). For that we'll log into our HuggingFace account."""
@@ -458,15 +462,15 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 #                                     commit_message=f"Training done")
 
 early_stop_callback = EarlyStopping(monitor="val_edit_distance", patience=3, verbose=False, mode="min")
-checkpoint_callback = ModelCheckpoint(dirpath='./result', filename='modie_e2e_{epoch}-{val_loss:.2f}', save_top_k=1, save_last=False, mode='min')
+checkpoint_callback = ModelCheckpoint(dirpath=config.result_path, filename='modie_e2e_{epoch}-{val_loss:.2f}', save_top_k=1, save_last=False, mode='min')
 
 trainer = pl.Trainer(
         accelerator="gpu",
         devices=1,
-        max_epochs=config.get("max_epochs"),
-        val_check_interval=config.get("val_check_interval"),
-        check_val_every_n_epoch=config.get("check_val_every_n_epoch"),
-        gradient_clip_val=config.get("gradient_clip_val"),
+        max_epochs=config.max_epochs,
+        val_check_interval=config.val_check_interval,
+        check_val_every_n_epoch=config.check_val_every_n_epoch,
+        gradient_clip_val=config.gradient_clip_val,
         precision=16, # we'll use mixed precision
         num_sanity_val_steps=0,
         # logger=wandb_logger,
