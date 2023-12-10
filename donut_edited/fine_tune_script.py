@@ -228,7 +228,7 @@ class DonutDataset(Dataset):
 
         # inputs
         img = sample['image']
-        blur_img = prepare_input(self.config, img, add_blur=True)
+        blur_img = prepare_input(self.config, img)
         pixel_values = processor(blur_img, random_padding=self.split == "train", return_tensors="pt").pixel_values
         pixel_values = pixel_values.squeeze()
 
