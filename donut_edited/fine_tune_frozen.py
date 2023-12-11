@@ -469,7 +469,7 @@ class DecoderFreeze(BaseFinetuning):
         self.freeze(pl_module.decoder)
 
 early_stop_callback = EarlyStopping(monitor="val_edit_distance", patience=3, verbose=False, mode="min")
-checkpoint_callback = ModelCheckpoint(dirpath=config.result_path, filename='modie_e2e_{epoch}-{val_loss:.2f}', save_top_k=1, save_last=False, mode='min')
+checkpoint_callback = ModelCheckpoint(dirpath=config.result_path, filename='modie_e2e_frozen_decoder_{epoch}-{val_loss:.2f}', save_top_k=1, save_last=False, mode='min')
 decoderfreeze = DecoderFreeze()
 
 
