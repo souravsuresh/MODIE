@@ -469,12 +469,9 @@ class DecoderFreeze(BaseFinetuning):
         self.freeze(pl_module.model.decoder)
 
     def finetune_function(self, pl_module, current_epoch, optimizer):
-        if current_epoch == 0:
-            for name, param in pl_module.model.decoder:
-                if param.requires_grad:
-                    print(f"Layer {name} has requires_grad=True.")
-                else:
-                    print(f"Layer {name} has requires_grad=False.")
+        if current_epoch in (0,1):
+            for name, param in pl_module.model.decoder.named_parameters():
+                print(f"Layer {name} has requires_grad={param.requires_grad}.")
 
 early_stop_callback = EarlyStopping(monitor="val_edit_distance", patience=3, verbose=False, mode="min")
 checkpoint_callback = ModelCheckpoint(dirpath=config.result_path, filename='modie_e2e_frozen_decoder_{epoch}-{val_loss:.2f}', save_top_k=1, save_last=False, mode='min')
