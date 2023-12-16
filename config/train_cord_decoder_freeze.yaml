@@ -21,4 +21,4 @@ check_val_every_n_epoch: 3
 gradient_clip_val: 1.0
 verbose: True
 add_blur: True
-freeze_decoder: False
+freeze_decoder: True
