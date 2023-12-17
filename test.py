@@ -46,7 +46,7 @@ processor.image_processor.size = config.input_size[::-1] # should be (width, hei
 processor.image_processor.do_align_long_axis = False
 
 val_dataset = DonutDataset("naver-clova-ix/cord-v2", config=config,
-                             split="validation", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
+                             split="train", task_start_token="<s_cord-v2>", prompt_end_token="<s_cord-v2>",
                              sort_json_key=config.sort_json_key, # cord dataset is preprocessed, so no need for this
                              processor = processor,
                              model = model,
